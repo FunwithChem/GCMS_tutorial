@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GC-MS Mission 2: Unknown</title>
+<style>
+:root { --n: #1f355f; --b: #234078; --bg: #eef2f7; --bd: #cbd5e1; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px Arial, sans-serif; background: var(--bg); color: #172033; line-height: 1.45; }
+header { background: linear-gradient(135deg, var(--n), var(--b)); color: #fff; padding: 25px 18px; }
+main, .head { max-width: 1180px; margin: auto; }
+.card { background: #fff; border: 1px solid var(--bd); border-radius: 12px; padding: 19px; margin: 18px 0; box-shadow: 0 2px 7px #0000000c; }
+h1 { margin: 0 0 5px; }
+h2, h3 { color: var(--n); }
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.ctl label { display: block; font-weight: bold; color: var(--n); margin-bottom: 5px; }
+select, button { font: inherit; }
+select { width: 100%; padding: 9px; border: 1px solid #aeb9c8; border-radius: 7px; background: #fff; }
+button { border: 0; border-radius: 7px; padding: 10px 15px; margin: 4px; background: var(--b); color: #fff; font-weight: bold; cursor: pointer; }
+button.secondary { background: #64748b; }
+button.good { background: #2e7d32; }
+button:hover { filter: brightness(.94); }
+.small { font-size: 13px; color: #5b6677; }
+canvas { width: 100%; height: 330px; border: 1px solid var(--bd); border-radius: 8px; background: #fff; display: block; }
+#ms { height: 300px; }
+#peaks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
+#peaks button { background: #516b93; padding: 7px 10px; font-size: 13px; }
+#peaks button.sel { background: #1f355f; outline: 3px solid #cbd8ee; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { border: 1px solid var(--bd); padding: 8px; text-align: left; }
+th { background: #edf2f8; color: var(--n); }
+.scroll { overflow-x: auto; }
+@media(max-width:900px){ .grid { grid-template-columns: repeat(2, 1fr); } .two { grid-template-columns: 1fr; } }
+@media(max-width:560px){ .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head">
+    <h1>GC-MS Method Development: Unknown</h1>
+    <div>Find the protocol • Separate the unknown • Identify five components</div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Mission Brief: Unknown</h2>
+    <p>This unknown contains five compounds. Develop a GC method, obtain separation, and use the mass spectra to identify all five components.</p>
+    <ol>
+      <li>Choose column, initial temperature, ramp, final temperature, and carrier-gas flow.</li>
+      <li>Run the GC and inspect the chromatogram.</li>
+      <li>Click each peak to view its mass spectrum.</li>
+      <li>Identify each component using MS evidence plus physical property data.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Develop the GC Protocol</h2>
+    <div class="grid">
+      <div class="ctl">
+        <label for="col">Column</label>
+        <select id="col">
+          <option value="nonpolar">Nonpolar — 5% phenyl / 95% dimethylpolysiloxane</option>
+          <option value="intermediate">Intermediate — 35% phenyl / 65% dimethylpolysiloxane</option>
+          <option value="polar">Polar — PEG-type</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="ini">Initial oven temp (°C)</label>
+        <select id="ini">
+          <option>40</option><option>50</option><option>60</option><option>70</option><option>80</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="ramp">Ramp (°C/min)</label>
+        <select id="ramp">
+          <option>5</option><option>10</option><option>15</option><option>20</option><option>30</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="fin">Final oven temp (°C)</label>
+        <select id="fin">
+          <option>150</option><option>175</option><option>200</option><option>225</option><option>250</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="flow">Carrier gas (mL/min)</label>
+        <select id="flow">
+          <option>0.5</option><option>0.8</option><option>1.0</option><option>1.2</option><option>1.5</option><option>2.0</option>
+        </select>
+      </div>
+    </div>
+    <button class="good" id="run">Run GC</button>
+    <button class="secondary" id="reset">Reset Method</button>
+  </section>
+
+  <section class="card">
+    <h2>Chromatogram</h2>
+    <canvas id="gc" width="1100" height="330"></canvas>
+    <div id="peaks"></div>
+  </section>
+
+  <section class="card">
+    <h2>Mass Spectrum Analysis</h2>
+    <div class="two">
+      <div>
+        <canvas id="ms" width="760" height="300"></canvas>
+        <div id="msinfo" class="small" style="margin-top:7px">No peak selected.</div>
+      </div>
+      <div>
+        <h3>Identify Selected Peak</h3>
+        <div class="ctl">
+          <label for="id">Your identification</label>
+          <select id="id"><option value="">Select a compound…</option></select>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Reference: Compound Library</h2>
+    <p class="small">Physical properties for reference. Use mass spectral fragments to assign peak identities.</p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Compound</th><th>Formula</th><th>MW (g/mol)</th><th>BP (°C)</th></tr>
+        </thead>
+        <tbody id="lib"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const C = [
+  {id:17, name:'Hexane', f:'C₆H₁₄', mw:86.18, bp:69, p:1, m:[43,57,71,86], a:[100,65,35,18]},
+  {id:4,  name:'Ethyl acetate', f:'C₄H₈O₂', mw:88.11, bp:77, p:3, m:[43,61,70,88], a:[100,18,35,28]},
+  {id:12, name:'Toluene', f:'C₇H₈', mw:92.14, bp:111, p:2, m:[39,65,91,92], a:[28,22,100,18]},
+  {id:8,  name:'1-Butanol', f:'C₄H₁₀O', mw:74.12, bp:118, p:5, m:[31,41,56,74], a:[75,38,100,12]},
+  {id:21, name:'Acetophenone', f:'C₈H₈O', mw:120.15, bp:202, p:4, m:[43,77,105,120], a:[35,42,100,18]},
+  {id:3,  name:'Pentane', f:'C₅H₁₂', mw:72.15, bp:36, p:1, m:[43,29,57,72], a:[100,82,72,12]},
+  {id:6,  name:'Cyclohexane', f:'C₆H₁₂', mw:84.16, bp:81, p:1, m:[56,84,41,69], a:[100,65,34,18]},
+  {id:15, name:'Diethyl ether', f:'C₄H₁₀O', mw:74.12, bp:35, p:2, m:[31,59,45,74], a:[18,100,72,7]},
+  {id:9,  name:'2-Butanone', f:'C₄H₈O', mw:72.11, bp:80, p:4, m:[43,72,29,57], a:[100,18,65,24]},
+  {id:14, name:'Ethylbenzene', f:'C₈H₁₀', mw:106.17, bp:136, p:2, m:[91,106,77,51], a:[100,23,18,12]}
+];
+
+// Definition for Unknown G
+const currentUnknown = { code: "G", parts: [3, 17, 9, 8, 14] };
+
+const CD = {
+  nonpolar: { s: 1, base: 1 },
+  intermediate: { s: 0.72, base: 1.05 },
+  polar: { s: 0.38, base: 1.12 }
+};
+
+let peaks = [], sel = -1;
+
+const $ = x => document.getElementById(x);
+const byId = id => C.find(c => c.id === id);
+
+function initUI() {
+  // Populate Compound Library Table
+  const lib = $('lib');
+  lib.innerHTML = '';
+  C.forEach(c => {
+    lib.insertAdjacentHTML('beforeend', `<tr><td>${c.name}</td><td>${c.f}</td><td>${c.mw}</td><td>${c.bp}</td></tr>`);
+  });
+
+  // Populate Dropdown for Peak Identification
+  const idSel = $('id');
+  idSel.innerHTML = '<option value="">Select a compound…</option>';
+  C.slice().sort((a,b) => a.name.localeCompare(b.name)).forEach(c => {
+    idSel.insertAdjacentHTML('beforeend', `<option value="${c.name}">${c.name}</option>`);
+  });
+
+  axes();
+  ms(null);
+}
+
+function axes() {
+  let c = $('gc').getContext('2d'), w = 1100, h = 330;
+  c.clearRect(0, 0, w, h);
+  c.fillStyle = '#fff';
+  c.fillRect(0, 0, w, h);
+  c.strokeStyle = '#d9e0ea';
+  for (let i = 0; i <= 10; i++) {
+    let x = 70 + i * 100;
+    c.beginPath(); c.moveTo(x, 25); c.lineTo(x, 285); c.stroke();
+    c.fillStyle = '#334155'; c.font = '12px Arial';
+    c.fillText(i * 2, x - 5, 310);
+  }
+  for (let i = 0; i <= 5; i++) {
+    let y = 25 + i * 52;
+    c.beginPath(); c.moveTo(70, y); c.lineTo(1070, y); c.stroke();
+  }
+  c.fillText('Retention time (min)', 500, 326);
+}
+
+function order(parts, colKey) {
+  const z = CD[colKey];
+  return parts.map(id => byId(id)).sort((a, b) => {
+    const ka = a.bp * (1 + z.s * (a.p - 1) * 0.018);
+    const kb = b.bp * (1 + z.s * (b.p - 1) * 0.018);
+    return ka - kb;
+  });
+}
+
+function calc() {
+  let col = $('col').value,
+      ini = +$('ini').value,
+      r = +$('ramp').value,
+      fin = +$('fin').value,
+      flow = +$('flow').value,
+      z = CD[col],
+      parts = currentUnknown.parts;
+
+  let sorted = order(parts, col);
+
+  let arr = sorted.map((c, i) => {
+    let tf = Math.max(.45, Math.min(1.65, (220 - fin) / 180 + .55));
+    let rf = Math.max(.62, Math.min(1.35, 15 / r));
+    let pf = 1 + z.s * (c.p - 1) * .11;
+    let bf = .85 + c.bp / 145;
+    let ff = 1.18 / Math.sqrt(flow);
+    let sf = 1 + Math.max(0, 70 - ini) * .004;
+    let t = (1.05 + i * .10 + bf * 1.75 + pf * .34) * tf * rf * ff * sf * z.base + Math.max(0, c.bp - 150) / 90;
+    
+    return {
+      c,
+      time: Math.min(15.7, t),
+      width: Math.max(.045, .055 + (c.p - 1) * .004 + .018 * (15 / r) + .025 * Math.abs(flow - 1.2) + z.s * .006)
+    };
+  });
+
+  return arr.sort((a, b) => a.time - b.time);
+}
+
+function draw() {
+  axes();
+  if (!peaks.length) return;
+
+  let c = $('gc').getContext('2d'), maxT = 16, maxY = 0;
+  for (let x = 0; x <= 1000; x += 2) {
+    let t = x / 1000 * maxT, y = 0;
+    peaks.forEach(p => y += Math.exp(-(((t - p.time) / p.width) ** 2)));
+    maxY = Math.max(maxY, y);
+  }
+
+  c.beginPath();
+  c.strokeStyle = '#1f355f';
+  c.lineWidth = 2;
+  for (let x = 0; x <= 1000; x++) {
+    let t = x / 1000 * maxT, y = 0;
+    peaks.forEach(p => y += Math.exp(-(((t - p.time) / p.width) ** 2)));
+    let yy = 285 - (y / maxY) * 230;
+    if (x === 0) c.moveTo(70 + x, yy);
+    else c.lineTo(70 + x, yy);
+  }
+  c.stroke();
+
+  peaks.forEach((p, i) => {
+    let x = 70 + (p.time / 16) * 1000;
+    c.strokeStyle = '#94a3b8';
+    c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(x, 285); c.lineTo(x, 25); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = '#1f355f';
+    c.font = 'bold 13px Arial';
+    c.fillText(i + 1, x - 4, 40);
+  });
+}
+
+function ms(c) {
+  let x = $('ms'), g = x.getContext('2d'), w = x.width, h = x.height;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, w, h);
+
+  if (!c) {
+    g.fillStyle = '#64748b';
+    g.font = '16px Arial';
+    g.fillText('Click a GC peak to view its mass spectrum.', 180, 150);
+    return;
+  }
+
+  let l = 55, r = 20, t = 25, b = 45, pw = w - l - r, ph = h - t - b;
+  g.strokeStyle = '#64748b';
+  g.beginPath(); g.moveTo(l, t); g.lineTo(l, h - b); g.lineTo(w - r, h - b); g.stroke();
+
+  c.m.forEach((mz, j) => {
+    let xx = l + (mz / 130) * pw, yy = h - b - (c.a[j] / 100) * ph;
+    g.strokeStyle = '#234078';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(xx, h - b); g.lineTo(xx, yy); g.stroke();
+    g.fillStyle = '#172033';
+    g.font = '12px Arial';
+    g.fillText(mz, xx - 8, yy - 7);
+  });
+  g.fillText('m/z', w / 2, h - 10);
+}
+
+function render() {
+  let box = $('peaks');
+  box.innerHTML = '';
+  peaks.forEach((p, i) => {
+    let b = document.createElement('button');
+    b.textContent = `Peak ${i + 1} — ${p.time.toFixed(2)} min`;
+    b.onclick = () => select(i);
+    box.appendChild(b);
+  });
+}
+
+function select(i) {
+  sel = i;
+  document.querySelectorAll('#peaks button').forEach((b, j) => b.classList.toggle('sel', i === j));
+  ms(peaks[i].c);
+  $('msinfo').innerHTML = `<b>Peak ${i + 1}</b> at ${peaks[i].time.toFixed(2)} min.`;
+  $('id').value = '';
+}
+
+function run() {
+  if (+$('fin').value <= +$('ini').value) {
+    alert("Final temperature must be higher than initial temperature.");
+    return;
+  }
+  peaks = calc();
+  sel = -1;
+  draw();
+  render();
+  ms(null);
+  $('msinfo').innerHTML = 'No peak selected.';
+}
+
+function reset() {
+  peaks = [];
+  sel = -1;
+  axes();
+  ms(null);
+  $('peaks').innerHTML = '';$('msinfo').innerHTML = 'No peak selected.';
+}
+
+$('run').onclick = run;
+$('reset').onclick = reset;
+
+initUI();
+</script>
+</body>
+</html>
