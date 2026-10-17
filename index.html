@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GC-MS Method Development Simulation</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fb;color:#222}
+header{background:#1f355f;color:#fff;text-align:center;padding:1rem}
+main{max-width:1200px;margin:auto;padding:20px}.card{background:#fff;padding:20px;margin-bottom:18px;border-radius:9px;box-shadow:0 2px 7px #0002}
+h2,h3{color:#1f355f}.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.control{border:1px solid #ddd;padding:12px;border-radius:7px}label{display:block;font-weight:600;margin-bottom:6px}
+select{width:100%;box-sizing:border-box;padding:8px;border:1px solid #bbb;border-radius:5px}
+button{background:#234078;color:#fff;border:0;padding:9px 15px;border-radius:5px;cursor:pointer;margin:5px 5px 5px 0}
+button:hover{background:#345a9c}.secondary{background:#777!important}
+.info{background:#eef4ff;padding:12px;border-radius:6px}.warning{background:#fff3cd;padding:12px;border-radius:6px}
+.success{background:#d4edda;padding:12px;border-radius:6px}.error{background:#f8d7da;padding:12px;border-radius:6px}
+.hidden{display:none}.small{font-size:.9rem;color:#555}.grid{display:grid;grid-template-columns:1.25fr .9fr;gap:18px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}}canvas{width:100%;height:320px;border:1px solid #ccc;border-radius:6px;background:#fff}
+table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#eef2f8}
+.peak{background:#f0f4fa;color:#1f355f;border:1px solid #b9c5d8}.peak.sel{background:#234078;color:#fff}
+</style>
+</head>
+<body>
+<header><h1>GC-MS Method Development Simulation</h1><p>Develop the method → separate the mixture → identify the compounds</p></header>
+<main>
+
+<section class="card">
+<h2>Learning Outcomes</h2>
+<ul>
+<li>Predict GC retention using boiling point, analyte polarity, and column polarity.</li>
+<li>Select an appropriate GC column.</li>
+<li>Evaluate oven temperature, temperature programming, and carrier-gas flow.</li>
+<li>Evaluate chromatographic separation.</li>
+<li>Use a mass spectrum associated with an individual GC peak to identify a compound.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Mission: Develop a GC Method</h2>
+<p>You have a mixture of five compounds. Develop a method that produces <b>baseline-resolved peaks</b> with the last peak before 15 minutes.</p>
+<div class="info"><b>Goal:</b> Separate all five compounds and then identify them using GC-MS.</div>
+<table><thead><tr><th>Compound</th><th>Formula</th><th>MW</th><th>BP °C</th><th>Relative polarity</th></tr></thead>
+<tbody id="compoundTable"></tbody></table>
+</section>
+
+<section class="card">
+<h2>1. Build Your GC Method</h2>
+<div class="controls">
+<div class="control"><label>GC Column</label>
+<select id="column"><option value="nonpolar">Nonpolar — 5% phenyl / 95% dimethylpolysiloxane</option><option value="mid">Intermediate polarity</option><option value="polar">Polar — PEG-type</option></select>
+<p class="small" id="columnInfo"></p></div>
+<div class="control"><label>Initial oven temperature (°C)</label><select id="initial"><option>40</option><option>50</option><option>60</option><option>80</option><option>100</option></select></div>
+<div class="control"><label>Temperature ramp (°C/min)</label><select id="ramp"><option>2</option><option>5</option><option selected>10</option><option>15</option><option>20</option><option>30</option></select></div>
+<div class="control"><label>Final oven temperature (°C)</label><select id="final"><option>150</option><option>180</option><option selected>220</option><option>250</option></select></div>
+<div class="control"><label>Carrier-gas flow (mL/min)</label><select id="flow"><option>0.5</option><option selected>1.0</option><option>1.5</option><option>2.0</option></select></div>
+</div>
+<div class="warning"><b>Predict first:</b> What order do you expect the compounds to elute?</div>
+<div id="prediction"></div>
+<button onclick="runGC()">Run GC</button><button class="secondary" onclick="resetAll()">Reset</button>
+<div id="runMsg"></div>
+</section>
+
+<section class="card hidden" id="gcCard">
+<h2>2. GC Chromatogram</h2><p class="small">Click a peak to view its corresponding mass spectrum.</p>
+<canvas id="gc"></canvas><div id="peakButtons"></div><div id="assessment"></div>
+</section>
+
+<section class="card hidden" id="msCard">
+<h2>3. Mass Spectrum</h2><div id="peakInfo" class="info">Select a GC peak.</div>
+<canvas id="ms"></canvas>
+<div id="identify"><h3>Identify the Compound</h3>
+<select id="guess"><option value="">Choose a compound...</option></select>
+<button onclick="checkID()">Check Identification</button><button class="secondary" onclick="hint()">MS Hint</button>
+<div id="idMsg"></div></div>
+</section>
+
+<section class="card">
+<h2>4. Analysis Table</h2>
+<table><thead><tr><th>Peak</th><th>Retention time</th><th>Identification</th><th>Status</th></tr></thead><tbody id="analysis"></tbody></table>
+</section>
+
+<section class="card"><h2>5. Final Analytical Report</h2>
+<p>When all five peaks have been identified and the chromatographic method meets the target, evaluate your final method.</p>
+<button onclick="finalCheck()">Evaluate Final Method</button><div id="finalMsg"></div></section>
+</main>
+
+<script>
+const C=[
+{name:"Hexane",f:"C₆H₁₄",mw:86.18,bp:69,p:1,ions:[43,57,71,86],a:[100,65,35,18]},
+{name:"Ethyl acetate",f:"C₄H₈O₂",mw:88.11,bp:77,p:3,ions:[43,61,70,88],a:[100,18,35,28]},
+{name:"Toluene",f:"C₇H₈",mw:92.14,bp:111,p:2,ions:[39,65,91,92],a:[28,22,100,18]},
+{name:"1-Butanol",f:"C₄H₁₀O",mw:74.12,bp:118,p:5,ions:[31,41,56,74],a:[75,38,100,12]},
+{name:"Acetophenone",f:"C₈H₈O",mw:120.15,bp:202,p:4,ions:[43,77,105,120],a:[35,42,100,18]}
+];
+let peaks=[],sel=-1,ids={},runs=0;
+const $=id=>document.getElementById(id);
+
+function init(){
+$("compoundTable").innerHTML=C.map(x=>`<tr><td>${x.name}</td><td>${x.f}</td><td>${x.mw}</td><td>${x.bp}</td><td>${"★".repeat(x.p)}</td></tr>`).join("");
+$("guess").innerHTML='<option value="">Choose a compound...</option>'+C.map(x=>`<option>${x.name}</option>`).join("");
+$("prediction").innerHTML='<label>Predicted first → last</label>'+[1,2,3,4,5].map(i=>`<select id="pr${i}">${opts()}</select>`).join(" ");
+$("column").onchange=columnInfo;columnInfo();table();
+}
+function opts(){return '<option value="">Choose...</option>'+C.map(x=>`<option>${x.name}</option>`).join("")}
+function columnInfo(){
+const v=$("column").value;
+$("columnInfo").textContent=v==="nonpolar"?"Nonpolar columns emphasize volatility and boiling point.":v==="mid"?"Intermediate columns combine volatility and stationary-phase interactions.":"Polar columns can change selectivity for polar analytes.";
+}
+function order(){
+let a=[...C],v=$("column").value;
+a.sort((x,y)=>v==="nonpolar"?x.bp-y.bp:(x.bp+4*x.p)-(y.bp+4*y.p));
+return a;
+}
+
+function runGC() {
+
+  runs++;
+
+  const getVal = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.value : "";
+  };
+
+  const init = +getVal("initial");
+  const r = +getVal("ramp");
+  const flow = +getVal("flow");
+  const fin = +getVal("final");
+  const col = getVal("column");
+
+  const runMsg = document.getElementById("runMsg");
+
+  if (fin <= init) {
+    if (runMsg) {
+      runMsg.innerHTML =
+        '<div class="error">Final temperature must be higher than initial temperature.</div>';
+    }
+    return;
+  }
+
+  // Base retention times mapped roughly to boiling points
+  const bpMap = {
+    69: 1.7,
+    77: 2.6,
+    111: 5.1,
+    118: 6.4,
+    202: 12.1
+  };
+
+  peaks = order()
+
+    // Remove very volatile compounds when initial temperature is too high and final temp too low
+    .filter(c =>
+  c.bp > init - 10 &&
+  c.bp < fin + 20
+)
+
+    .map((c, i) => {
+
+      let base =
+        bpMap[Math.round(c.bp)] ||
+        (c.bp * 0.05 + 0.2);
+
+      // Temperature & flow effects
+      let t =
+        base +
+        (init - 40) * 0.012 +
+        (r - 10) * 0.035 +
+        (1 - flow) * 0.75;
+
+      if (init > 70) t -= 0.65;
+      if (r > 15) t -= 0.55;
+      if (r < 5) t += 0.8;
+      if (flow < 1) t += 1.0;
+      if (flow > 1.5) t -= 0.6;
+
+      // Polar column effects
+      if (col === "polar" && c.p && c.p >= 3) {
+        t += (c.p - 2) * 0.8;
+      }
+
+      // Peak broadening
+      let width =
+        0.13 +
+        Math.abs(flow - 1) * 0.10 +
+        (r > 15 ? 0.10 : 0) +
+        (r < 5 ? 0.05 : 0);
+
+      if (col === "polar" && c.p >= 4) {
+        width += 0.04;
+      }
+
+      return {
+        c,
+        time: Math.max(0.8 + i * 0.05, t),
+        width
+      };
+    });
+
+  peaks.sort((a, b) => a.time - b.time);
+
+  const gcCard = document.getElementById("gcCard");
+  const msCard = document.getElementById("msCard");
+
+  if (gcCard) gcCard.classList.remove("hidden");
+  if (msCard) msCard.classList.remove("hidden");
+
+  if (typeof drawGC === "function") drawGC();
+  if (typeof buttons === "function") buttons();
+  if (typeof assessment === "function") assessment();
+  if (typeof table === "function") table();
+
+  if (runMsg) {
+    runMsg.innerHTML =
+      `<div class="success">GC run ${runs} complete. Examine the chromatogram.</div>`;
+  }
+}
+
+function drawGC1() {
+    alert("drawGC called");
+
+    const cv = document.getElementById("gc");
+
+    if (!cv) {
+        alert("Canvas with id='gc' not found!");
+        return;
+    }
+
+    alert("Canvas found!");
+}
+
+function drawGC() {
+  const cv = document.getElementById("gc");
+
+  if (!cv) {
+    console.error("Canvas with id='gc' not found");
+    return;
+  }
+
+  const peakList =
+    (typeof peaks !== "undefined" &&
+      Array.isArray(peaks) &&
+      peaks.length)
+      ? peaks
+      : [];
+
+  const ctx = cv.getContext("2d");
+
+  if (!ctx) {
+    console.error("Could not get 2D canvas context");
+    return;
+  }
+
+  const w = cv.clientWidth || 600;
+  const h = 320;
+  const d = window.devicePixelRatio || 1;
+
+  // High DPI support
+  cv.width = w * d;
+  cv.height = h * d;
+
+  // Prevent scaling accumulation
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+
+  ctx.clearRect(0, 0, w, h);
+
+  const m = { l: 55, r: 20, t: 20, b: 45 };
+  const pw = w - m.l - m.r;
+  const ph = h - m.t - m.b;
+
+  const lastTime = peakList.length
+    ? peakList[peakList.length - 1].time
+    : 10;
+
+  const maxT = Math.max(15, lastTime + 1.5);
+
+  const X = t => m.l + (t / maxT) * pw;
+
+  // Draw grid
+  ctx.strokeStyle = "#eee";
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "#333";
+  ctx.font = "12px system-ui";
+
+  for (let t = 0; t <= maxT; t += 2) {
+    const x = X(t);
+
+    ctx.fillText(t, x - 5, h - m.b + 20);
+
+    ctx.beginPath();
+    ctx.moveTo(x, h - m.b);
+    ctx.lineTo(x, m.t);
+    ctx.stroke();
+  }
+
+  // Draw axes
+  ctx.strokeStyle = "#aaa";
+
+  ctx.beginPath();
+  ctx.moveTo(m.l, m.t);
+  ctx.lineTo(m.l, h - m.b);
+  ctx.lineTo(w - m.r, h - m.b);
+  ctx.stroke();
+
+  // Nothing more to draw if no peaks
+  if (!peakList.length) return;
+
+  function getSignal(t) {
+    let y = 0;
+
+    peakList.forEach(p => {
+      const width = p.width || 0.2;
+      y += Math.exp(-Math.pow((t - p.time) / width, 2));
+    });
+
+    return y;
+  }
+
+  // Find signal maximum
+  let maxY = 1;
+
+  for (let x = 0; x < pw; x += 2) {
+    const t = (x / pw) * maxT;
+    maxY = Math.max(maxY, getSignal(t));
+  }
+
+  // Draw chromatogram
+  ctx.beginPath();
+
+  for (let x = 0; x <= pw; x++) {
+    const t = (x / pw) * maxT;
+    const y = getSignal(t);
+
+    const yy =
+      h - m.b - (y / maxY) * ph * 0.88;
+
+    if (x === 0) {
+      ctx.moveTo(X(t), yy);
+    } else {
+      ctx.lineTo(X(t), yy);
+    }
+  }
+
+  ctx.strokeStyle = "#234078";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Peak markers and labels
+  peakList.forEach((p, i) => {
+    const x = X(p.time);
+
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "#777";
+
+    ctx.beginPath();
+    ctx.moveTo(x, h - m.b);
+    ctx.lineTo(x, m.t);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "#234078";
+    ctx.font = "bold 12px system-ui";
+    ctx.fillText(i + 1, x - 4, m.t + 14);
+  });
+}
+
+function drawGCold() {
+alert("drawGC called");
+alert(document.body.innerHTML.includes('id="gc"'));
+alert(typeof $);
+alert($.fn ? "jQuery" : "Not jQuery");
+
+  const cv = document.getElementById("gc");
+alert("cv = " + cv);
+alert("jQuery found = " + (typeof $ === "function"));
+alert("$('#gc').length = " + (typeof $ === "function" ? $("#gc").length : "no jquery"));
+alert("document.getElementById('gc') = " + document.getElementById("gc"));
+  if (!cv) return;
+
+  // Ensure peaks exists and has elements
+alert("drawGC called ensure peaks");
+  const peakList = (typeof peaks !== "undefined" && Array.isArray(peaks) && peaks.length) ? peaks : [];
+  
+  const ctx = cv.getContext("2d");
+  const w = cv.clientWidth || 600;
+  const h = 320;
+  const d = window.devicePixelRatio || 1;
+
+
+  // Set internal canvas resolution for High-DPI / Retina screens
+  cv.width = w * d;
+  cv.height = h * d;
+  ctx.scale(d, d);
+  ctx.clearRect(0, 0, w, h);
+
+alert(
+  "canvas found=" + !!cv +
+  "\nwidth=" + cv.clientWidth +
+  "\nheight=" + cv.clientHeight
+);
+
+  const m = { l: 55, r: 20, t: 20, b: 45 };
+  const pw = w - m.l - m.r;
+  const ph = h - m.t - m.b;
+  
+  const lastTime = peakList.length ? peakList[peakList.length - 1].time : 10;
+  const maxT = Math.max(15, lastTime + 1.5);
+
+  const X = t => m.l + (t / maxT) * pw;
+
+  // Draw Grid & Axes
+  ctx.strokeStyle = "#eee";
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "#333";
+  ctx.font = "12px system-ui";
+
+  for (let t = 0; t <= maxT; t += 2) {
+    let x = X(t);
+    ctx.fillText(t, x - 5, h - m.b + 20);
+    ctx.beginPath();
+    ctx.moveTo(x, h - m.b);
+    ctx.lineTo(x, m.t);
+    ctx.stroke();
+  }
+
+  // Draw Main X/Y Axis Line
+  ctx.strokeStyle = "#aaa";
+  ctx.beginPath();
+  ctx.moveTo(m.l, m.t);
+  ctx.lineTo(m.l, h - m.b);
+  ctx.lineTo(w - m.r, h - m.b);
+  ctx.stroke();
+
+  if (!peakList.length) return;
+
+  // Calculate Peak Signal (Gaussian curve)
+  const getSignal = (t) => {
+    let y = 0;
+    peakList.forEach(p => {
+      const wSig = p.width || 0.2;
+      y += Math.exp(-Math.pow((t - p.time) / wSig, 2));
+    });
+    return y;
+  };
+
+  // Find max Y for normalization
+  let maxY = 1;
+  for (let x = 0; x < pw; x += 2) {
+    let t = (x / pw) * maxT;
+    maxY = Math.max(maxY, getSignal(t));
+  }
+
+  // Plot GC Chromatogram
+  ctx.beginPath();
+  for (let x = 0; x <= pw; x++) {
+    let t = (x / pw) * maxT;
+    let y = getSignal(t);
+    let yy = h - m.b - (y / maxY) * ph * 0.88;
+    
+    if (x === 0) ctx.moveTo(X(t), yy);
+    else ctx.lineTo(X(t), yy);
+  }
+  
+  ctx.strokeStyle = "#234078";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Draw Peak Markers & Labels
+  peakList.forEach((p, i) => {
+    let x = X(p.time);
+    
+    // Dashed retention time line
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "#777";
+    ctx.beginPath();
+    ctx.moveTo(x, h - m.b);
+    ctx.lineTo(x, m.t);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Peak label
+    ctx.fillStyle = "#234078";
+    ctx.font = "bold 12px system-ui";
+    ctx.fillText(i + 1, x - 4, m.t + 14);
+  });
+}
+function buttons(){
+$("peakButtons").innerHTML="<b>Select a peak:</b> "+peaks.map((p,i)=>`<button class="peak ${sel===i?"sel":""}" onclick="selectPeak(${i})">Peak ${i+1} — ${p.time.toFixed(2)} min</button>`).join("");
+}
+function selectPeak(i){
+sel=i;let p=peaks[i];$("peakInfo").innerHTML=`<b>Peak ${i+1}</b><br>Retention time: <b>${p.time.toFixed(2)} min</b><br>This peak represents one component leaving the GC column.`;
+$("guess").value=ids[i]?.guess||"";drawMS(p.c);buttons();
+}
+function drawMS(c){
+let cv=$("ms"),ctx=cv.getContext("2d"),w=cv.clientWidth,h=320,d=devicePixelRatio||1;cv.width=w*d;cv.height=h*d;ctx.scale(d,d);ctx.clearRect(0,0,w,h);
+let m={l:55,r:20,t:25,b:45},pw=w-m.l-m.r,ph=h-m.t-m.b,maxM=130,X=x=>m.l+x/maxM*pw;
+ctx.strokeStyle="#aaa";ctx.beginPath();ctx.moveTo(m.l,m.t);ctx.lineTo(m.l,h-m.b);ctx.lineTo(w-m.r,h-m.b);ctx.stroke();
+ctx.fillStyle="#333";ctx.font="12px system-ui";for(let x=0;x<=120;x+=20)ctx.fillText(x,X(x)-6,h-m.b+20);
+c.ions.forEach((mz,i)=>{let x=X(mz),y=h-m.b-c.a[i]/100*ph;ctx.strokeStyle="#234078";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,h-m.b);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle="#222";ctx.fillText(mz,x-8,y-6)});
+ctx.fillStyle="#1f355f";ctx.font="bold 14px system-ui";ctx.fillText("Simulated teaching mass spectrum",m.l,m.t);
+}
+function checkID(){
+if(sel<0)return;let g=$("guess").value,correct=peaks[sel].c.name;if(!g){$("idMsg").innerHTML='<div class="warning">Choose a compound.</div>';return}
+ids[sel]={guess:g,ok:g===correct};$("idMsg").innerHTML=g===correct?`<div class="success"><b>Correct.</b> The fragmentation pattern is consistent with ${correct}.</div>`:`<div class="error"><b>Not quite.</b> Examine the major fragment ions and molecular ion again.</div>`;table();
+}
+function hint(){if(sel<0)return;$("idMsg").innerHTML=`<div class="warning"><b>MS Hint:</b> Look at the strongest fragment ion, then consider whether a molecular ion appears near the candidate's molecular mass. The whole pattern is more informative than one m/z value.</div>`}
+function assessment(){
+let sep=0;for(let i=1;i<peaks.length;i++)if(peaks[i].time-peaks[i-1].time>=2*((peaks[i].width+peaks[i-1].width)/2))sep++;
+let last=peaks.at(-1).time;
+$("assessment").innerHTML=`<h3>Method Assessment</h3><p>Baseline-separated peaks: <b>${sep+1}/5</b></p><p>Last peak: <b>${last.toFixed(2)} min</b></p>`+
+(sep===4&&last<=15?'<div class="success"><b>Excellent method.</b> All five peaks are baseline separated and the run is under 15 min.</div>':sep>=3?'<div class="warning"><b>Close.</b> Modify the method to improve separation.</div>':'<div class="error"><b>Needs improvement.</b> Several peaks are not adequately separated.</div>');
+}
+function table(){
+$("analysis").innerHTML=peaks.length?peaks.map((p,i)=>{let q=ids[i];return `<tr><td>${i+1}</td><td>${p.time.toFixed(2)} min</td><td>${q?.ok?p.c.name:(q?.guess||"—")}</td><td>${q?.ok?"Correct":q?"Try again":"Not identified"}</td></tr>`}).join(""):'<tr><td colspan="4">Run the GC to populate the table.</td></tr>';
+}
+function finalCheck(){
+if(!peaks.length){$("finalMsg").innerHTML='<div class="warning">Run the GC first.</div>';return}
+let sep=0;for(let i=1;i<peaks.length;i++)if(peaks[i].time-peaks[i-1].time>=2*((peaks[i].width+peaks[i-1].width)/2))sep++;
+let idsOK=peaks.every((p,i)=>ids[i]?.ok),time=peaks.at(-1).time<=15;
+if(sep===4&&time&&idsOK)$("finalMsg").innerHTML='<div class="success"><b>Method accepted.</b> All five compounds were correctly identified, baseline separated, and analyzed in under 15 min.<br><br><b>GC separates and provides retention information; MS provides identification evidence.</b></div>';
+else $("finalMsg").innerHTML=`<div class="warning"><b>Method not yet accepted.</b> ${sep<4?"Improve separation. ":""}${!time?"Reduce the analysis time. ":""}${!idsOK?"Correct the remaining identifications.":""}</div>`;
+}
+function resetAll(){peaks=[];sel=-1;ids={};runs=0;$("gcCard").classList.add("hidden");$("msCard").classList.add("hidden");$("runMsg").innerHTML="";$("finalMsg").innerHTML="";table()}
+window.onresize=()=>{if(peaks.length){drawGC();if(sel>=0)drawMS(peaks[sel].c)}};init();
+</script>
+</body></html>
